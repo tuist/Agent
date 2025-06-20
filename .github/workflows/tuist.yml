@@ -22,7 +22,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - run: xcode-select --switch /Applications/Xcode_16.4.app
+      - run: sudo xcode-select --switch /Applications/Xcode_16.4.app
       - uses: jdx/mise-action@v2
       - name: Build Swift Package
         run: swift build
@@ -35,7 +35,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - run: xcode-select --switch /Applications/Xcode_16.4.app
+      - run: sudo xcode-select --switch /Applications/Xcode_16.4.app
       - uses: jdx/mise-action@v2
       - name: Swift Format Check
         run: swift-format lint --recursive Sources/ App/ Tests/ || true
@@ -45,7 +45,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - run: xcode-select --switch /Applications/Xcode_16.4.app
+      - run: sudo xcode-select --switch /Applications/Xcode_16.4.app
       - uses: jdx/mise-action@v2
       - name: Test Swift Package
         run: swift test
