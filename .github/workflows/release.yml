@@ -33,7 +33,6 @@ jobs:
       - uses: jdx/mise-action@v2
         with:
           experimental: true
-      - run: brew install xz
       - name: Check if there are releasable changes
         id: is-releasable
         run: |
@@ -68,7 +67,7 @@ jobs:
           commit_options: "--allow-empty"
           tagging_message: ${{ steps.next-version.outputs.NEXT_VERSION }}
           skip_dirty_check: true
-          commit_message: "[Release] sidekick ${{ steps.next-version.outputs.NEXT_VERSION }}"
+          commit_message: "[Release] tuist-sdk ${{ steps.next-version.outputs.NEXT_VERSION }}"
       - name: Get release notes
         id: release-notes
         if: env.should-release == 'true'
@@ -78,53 +77,14 @@ jobs:
           echo "RELEASE_NOTES<<EOF" >> "$GITHUB_OUTPUT"
           git cliff --latest >> "$GITHUB_OUTPUT"
           echo "EOF" >> "$GITHUB_OUTPUT"
-      - env:
-          SIDEKICK_VERSION: ${{ steps.next-version.outputs.NEXT_VERSION }}
-        run: mise run release:macos
-      - env:
-          SIDEKICK_VERSION: ${{ steps.next-version.outputs.NEXT_VERSION }}
-        run: mise run release:linux
-      - name: Sign macOS binary
-        env:
-          MACOS_SIGNING_CERTIFICATE_BASE64: ${{ secrets.MACOS_SIGNING_CERTIFICATE_BASE64 }}
-          CERTIFICATE_PASSWORD: ${{ secrets.CERTIFICATE_PASSWORD }}
-        run: |
-          TMP_DIR=$(mktemp -d)
-          KEYCHAIN_PASSWORD=$(uuidgen)
-          KEYCHAIN_PATH=$TMP_DIR/keychain.keychain
-          CERTIFICATE_PATH=$TMP_DIR/certificate.p12
-          CERTIFICATE_NAME="Developer ID Application: Tuist GmbH (U6LC622NKF)"
-
-          echo "$MACOS_SIGNING_CERTIFICATE_BASE64" | base64 --decode > $CERTIFICATE_PATH
-          security create-keychain -p $KEYCHAIN_PASSWORD $KEYCHAIN_PATH
-          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
-          security default-keychain -s $KEYCHAIN_PATH
-          security unlock-keychain -p $KEYCHAIN_PASSWORD $KEYCHAIN_PATH
-          security import $CERTIFICATE_PATH -P $CERTIFICATE_PASSWORD -A
-
-          /usr/bin/codesign --sign "$CERTIFICATE_NAME" --timestamp --options runtime --verbose burrito_out/sidekick_macos
-      - run: |
-          mv burrito_out/sidekick_linux burrito_out/sidekick-linux-arm64
-          mv burrito_out/sidekick_macos burrito_out/sidekick-macos-arm64
-          tar -czvf burrito_out/sidekick-linux-arm64.tar.gz burrito_out/sidekick-linux-arm64
-          tar -czvf burrito_out/sidekick-macos-arm64.tar.gz burrito_out/sidekick-macos-arm64
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         if: env.should-release == 'true'
         with:
           draft: false
-          repository: tuist/sidekick
+          repository: tuist/sdk
           name: ${{ steps.next-version.outputs.NEXT_VERSION }}
           tag_name: ${{ steps.next-version.outputs.NEXT_VERSION }}
           body: ${{ steps.release-notes.outputs.RELEASE_NOTES }}
           target_commitish: ${{ steps.auto-commit-action.outputs.commit_hash }}
-          files: |
-            burrito_out/sidekick-linux-arm64
-            burrito_out/sidekick-linux-arm64.tar.gz
-            burrito_out/sidekick-macos-arm64
-            burrito_out/sidekick-macos-arm64.tar.gz
-      - name: Generate checksums
-        uses: thewh1teagle/checksum@v1
-        with:
-          tag: ${{ steps.next-version.outputs.NEXT_VERSION }}

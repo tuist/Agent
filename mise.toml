@@ -1,4 +1,5 @@
 [tools]
 "ubi:orhun/git-cliff" = "2.8.0"
+tuist = "4.52.0"
 
 [hooks]
