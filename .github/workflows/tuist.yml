@@ -18,10 +18,11 @@ env:
 jobs:
   build:
     name: Build
-    runs-on: "macos-latest"
+    runs-on: "macos-15"
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+      - run: xcode-select --switch /Applications/Xcode_16.4.app
       - uses: jdx/mise-action@v2
       - name: Build Swift Package
         run: swift build
@@ -30,19 +31,21 @@ jobs:
 
   lint:
     name: Lint
-    runs-on: "macos-latest"
+    runs-on: "macos-15"
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+      - run: xcode-select --switch /Applications/Xcode_16.4.app
       - uses: jdx/mise-action@v2
       - name: Swift Format Check
         run: swift-format lint --recursive Sources/ App/ Tests/ || true
   test:
     name: Test
-    runs-on: "macos-latest"
+    runs-on: "macos-15"
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+      - run: xcode-select --switch /Applications/Xcode_16.4.app
       - uses: jdx/mise-action@v2
       - name: Test Swift Package
         run: swift test
