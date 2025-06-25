@@ -1,11 +1,11 @@
 import Foundation
 import Network
 import MCP
-import OSLog
+import Logging
 
 /// HTTP server transport implementation for MCP Swift SDK
 actor HTTPServerTransport: Transport {
-    let logger = Logger(subsystem: "com.tuist.mcp", category: "HTTPServerTransport")
+    let logger = Logger(label: "com.tuist.mcp.HTTPServerTransport")
     
     private let port: Int
     private var listener: NWListener?
@@ -186,7 +186,7 @@ actor HTTPServerTransport: Transport {
             headers.append("Content-Length: 0")
         }
         
-        var fullResponse = headers.joined(separator: "\r\n") + "\r\n\r\n"
+        let fullResponse = headers.joined(separator: "\r\n") + "\r\n\r\n"
         
         var finalData = fullResponse.data(using: .utf8) ?? Data()
         if let responseData = responseData {

@@ -16,12 +16,8 @@ final class MCPServer: @unchecked Sendable {
             guard let self = self else { return }
             
             Task {
-                do {
-                    let actualPort = self.resolvePort(configuredPort: port)
-                    await self.startServer(port: actualPort)
-                } catch {
-                    print("❌ Failed to start MCP server: \(error)")
-                }
+                let actualPort = self.resolvePort(configuredPort: port)
+                await self.startServer(port: actualPort)
             }
         }
     }
@@ -41,19 +37,21 @@ final class MCPServer: @unchecked Sendable {
             )
             
             // Register resources/list handler
-            server = server?.withMethodHandler(ListResources.self) { [weak self] _ in
-                return [
-                    Resource(
-                        name: "Intercepted Requests",
-                        uri: "tuist://requests",
-                        description: "HTTP/HTTPS requests intercepted by Tuist SDK",
-                        mimeType: "application/json"
-                    )
-                ]
+            server = await server?.withMethodHandler(ListResources.self) { _ in
+                return ListResources.Result(
+                    resources: [
+                        Resource(
+                            name: "Intercepted Requests",
+                            uri: "tuist://requests",
+                            description: "HTTP/HTTPS requests intercepted by Tuist SDK",
+                            mimeType: "application/json"
+                        )
+                    ]
+                )
             }
             
             // Register resources/read handler
-            server = server?.withMethodHandler(ReadResource.self) { [weak self] parameters in
+            server = await server?.withMethodHandler(ReadResource.self) { parameters in
                 if parameters.uri == "tuist://requests" {
                     let requests = RequestInterceptor.shared.history.getAllRequests()
                     let encoder = JSONEncoder()
@@ -63,13 +61,15 @@ final class MCPServer: @unchecked Sendable {
                         let jsonData = try encoder.encode(requests)
                         let jsonString = String(data: jsonData, encoding: .utf8) ?? "[]"
                         
-                        return [
-                            Resource.Content(
-                                uri: parameters.uri,
-                                mimeType: "application/json",
-                                text: jsonString
-                            )
-                        ]
+                        return ReadResource.Result(
+                            contents: [
+                                Resource.Content.text(
+                                    jsonString,
+                                    uri: parameters.uri,
+                                    mimeType: "application/json"
+                                )
+                            ]
+                        )
                     } catch {
                         throw MCPError.internalError("Failed to encode requests: \(error.localizedDescription)")
                     }
