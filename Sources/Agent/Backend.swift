@@ -1,8 +1,24 @@
 import Foundation
 
 public protocol AgentBackend: Sendable {
-    func sendMessage(_ message: String, conversation: Conversation) async throws -> String
-    func streamMessage(_ message: String, conversation: Conversation) -> AsyncThrowingStream<String, Error>
+    func sendMessage(_ message: String, conversation: Conversation, tools: [Tool]) async throws -> BackendResponse
+    func streamMessage(_ message: String, conversation: Conversation, tools: [Tool]) -> AsyncThrowingStream<StreamChunk, Error>
+}
+
+public struct BackendResponse: Sendable {
+    public let content: String?
+    public let toolCalls: [ToolCall]?
+    
+    public init(content: String? = nil, toolCalls: [ToolCall]? = nil) {
+        self.content = content
+        self.toolCalls = toolCalls
+    }
+}
+
+public enum StreamChunk: Sendable {
+    case content(String)
+    case toolCall(ToolCall)
+    case done
 }
 
 public struct Conversation: Sendable {
@@ -20,22 +36,29 @@ public struct Message: Sendable {
         case user
         case assistant
         case system
+        case tool
     }
     
     public let id: String
     public let role: Role
-    public let content: String
+    public let content: String?
+    public let toolCalls: [ToolCall]?
+    public let toolCallId: String?
     public let timestamp: Date
     
     public init(
         id: String = UUID().uuidString,
         role: Role,
-        content: String,
+        content: String? = nil,
+        toolCalls: [ToolCall]? = nil,
+        toolCallId: String? = nil,
         timestamp: Date = Date()
     ) {
         self.id = id
         self.role = role
         self.content = content
+        self.toolCalls = toolCalls
+        self.toolCallId = toolCallId
         self.timestamp = timestamp
     }
 }

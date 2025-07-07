@@ -1,15 +1,13 @@
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/icon-dark.svg">
-  <img src="docs/icon-light.svg" alt="Agent" width="100" align="right">
-</picture>
-<h1>Agent</h1>
+<img src="assets/logo.png" alt="Agent" width="100" align="right">
+
+# Agent
 
 [![Swift](https://github.com/tuist/agent/actions/workflows/swift.yml/badge.svg)](https://github.com/tuist/agent/actions/workflows/swift.yml)
 ![Swift Version](https://img.shields.io/badge/swift-6.1-orange.svg)
 ![Platforms](https://img.shields.io/badge/platforms-iOS%20%7C%20macOS%20%7C%20tvOS%20%7C%20watchOS-lightgray.svg)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Agent is a Swift SDK for Apple applications that enables easy integration with various AI APIs (Claude, ChatGPT, and custom servers) to build agentic features. It provides a unified interface for different AI backends, allowing you to switch between providers or use your own server without changing your application code.
+Agent is a Swift SDK for Apple applications that enables easy integration with various AI APIs (Claude, ChatGPT, and custom servers) to build agentic features. It provides a unified interface for different AI backends with support for tool use, allowing you to create powerful AI agents that can execute actions and interact with users.
 
 ## Features
 
@@ -17,6 +15,8 @@ Agent is a Swift SDK for Apple applications that enables easy integration with v
 - 🔄 **Streaming Support**: Real-time streaming responses for better user experience
 - 🔒 **Flexible Authentication**: Use API keys directly or proxy through your own server
 - 💬 **Conversation Management**: Built-in conversation history and context management
+- 🛠️ **Tool Use**: Build agents that can execute tools and actions
+- 👤 **User Interaction**: Support for interactive conversations with user input
 - 🧪 **Fully Tested**: Comprehensive test suite using Swift Testing framework
 - 📱 **Multi-Platform**: Works on iOS, macOS, tvOS, and watchOS
 
@@ -37,6 +37,10 @@ Or add it through Xcode:
 2. Enter: `https://github.com/tuist/agent.git`
 
 ## Usage
+
+### Quick Start
+
+Here's how to get started with the Agent SDK:
 
 ### Basic Usage with Claude
 
@@ -86,13 +90,74 @@ let agent = Agent.withCustomServer(
 let response = try await agent.sendMessage("Analyze this data...")
 ```
 
+### Tool Use
+
+```swift
+// Create an agent with tools
+let agent = Agent.withClaude(
+    apiKey: "your-api-key",
+    systemPrompt: "You are a helpful assistant with access to tools"
+)
+
+// Add tools to the agent
+agent.addTool(CalculatorTool())
+agent.addTool(FileReaderTool())
+agent.addTool(WebSearchTool())
+
+// The agent will automatically use tools when needed
+let response = try await agent.sendMessage("What is 42 * 73?")
+// The agent will use the calculator tool to compute the result
+
+// Set up user input handler for interactive conversations
+agent.setUserInputHandler { question in
+    print("Assistant asks: \(question)")
+    return readLine() ?? ""
+}
+
+// Add a tool that can ask the user questions
+let userTool = UserInputTool(agent: agent)
+agent.addTool(userTool)
+```
+
+### Creating Custom Tools
+
+```swift
+struct WeatherTool: Tool {
+    let name = "get_weather"
+    let description = "Get the current weather for a location"
+
+    var inputSchema: ToolInputSchema {
+        ToolInputSchema(
+            properties: [
+                "location": PropertySchema(
+                    type: "string",
+                    description: "The city and country, e.g. 'London, UK'"
+                )
+            ],
+            required: ["location"]
+        )
+    }
+
+    func execute(input: [String: Any]) async throws -> String {
+        guard let location = input["location"] as? String else {
+            throw AgentError.invalidResponse
+        }
+
+        // Call weather API here
+        return "The weather in \(location) is sunny and 22°C"
+    }
+}
+```
+
 ### Advanced Usage
 
 ```swift
 // Access conversation history
 let messages = agent.messages
 for message in messages {
-    print("\(message.role): \(message.content)")
+    if let content = message.content {
+        print("\(message.role): \(content)")
+    }
 }
 
 // Clear conversation while keeping system prompt
@@ -108,17 +173,20 @@ You can create your own backend by conforming to the `AgentBackend` protocol:
 
 ```swift
 struct MyCustomBackend: AgentBackend {
-    func sendMessage(_ message: String, conversation: Conversation) async throws -> String {
+    func sendMessage(_ message: String, conversation: Conversation, tools: [Tool]) async throws -> BackendResponse {
         // Your implementation
+        // Return BackendResponse with content and/or tool calls
     }
-    
-    func streamMessage(_ message: String, conversation: Conversation) -> AsyncThrowingStream<String, Error> {
+
+    func streamMessage(_ message: String, conversation: Conversation, tools: [Tool]) -> AsyncThrowingStream<StreamChunk, Error> {
         // Your streaming implementation
+        // Yield .content(String) for text chunks
+        // Yield .toolCall(ToolCall) for tool invocations
     }
 }
 
 let customBackend = MyCustomBackend()
-let agent = Agent(backend: customBackend)
+let agent = Agent(backend: customBackend, tools: [CalculatorTool()])
 ```
 
 ## Server Implementation Guide
@@ -176,4 +244,4 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 
 ## Acknowledgments
 
-Built with ❤️ by the [Tuist](https://tuist.io) team.
+Built with ❤️ by the [Tuist](https://tuist.dev) team.

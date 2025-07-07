@@ -15,7 +15,7 @@ public struct CustomServerBackend: AgentBackend {
         self.session = session
     }
     
-    public func sendMessage(_ message: String, conversation: Conversation) async throws -> String {
+    public func sendMessage(_ message: String, conversation: Conversation, tools: [Tool]) async throws -> BackendResponse {
         let request = try createRequest(message: message, conversation: conversation)
         
         let (data, response) = try await session.data(for: request)
@@ -26,7 +26,8 @@ public struct CustomServerBackend: AgentBackend {
         
         switch httpResponse.statusCode {
         case 200:
-            return try parseResponse(data)
+            let content = try parseResponse(data)
+            return BackendResponse(content: content)
         case 401:
             throw AgentError.authenticationError
         case 429:
@@ -38,7 +39,7 @@ public struct CustomServerBackend: AgentBackend {
         }
     }
     
-    public func streamMessage(_ message: String, conversation: Conversation) -> AsyncThrowingStream<String, Error> {
+    public func streamMessage(_ message: String, conversation: Conversation, tools: [Tool]) -> AsyncThrowingStream<StreamChunk, Error> {
         AsyncThrowingStream { continuation in
             Task {
                 do {
@@ -61,8 +62,8 @@ public struct CustomServerBackend: AgentBackend {
                             }
                             
                             if let data = jsonString.data(using: .utf8),
-                               let chunk = try? JSONDecoder().decode(StreamChunk.self, from: data) {
-                                continuation.yield(chunk.content)
+                               let chunk = try? JSONDecoder().decode(CustomStreamChunk.self, from: data) {
+                                continuation.yield(.content(chunk.content))
                             }
                         }
                     }
@@ -87,9 +88,10 @@ public struct CustomServerBackend: AgentBackend {
         
         let requestBody = CustomServerRequest(
             conversationId: conversation.id,
-            messages: conversation.messages.map { 
-                CustomMessage(role: $0.role.rawValue, content: $0.content)
-            } + [CustomMessage(role: "user", content: message)]
+            messages: conversation.messages.compactMap { message -> CustomMessage? in
+                guard let content = message.content else { return nil }
+                return CustomMessage(role: message.role.rawValue, content: content)
+            }
         )
         
         request.httpBody = try JSONEncoder().encode(requestBody)
@@ -126,6 +128,6 @@ private struct CustomServerResponse: Codable {
     let content: String
 }
 
-private struct StreamChunk: Codable {
+private struct CustomStreamChunk: Codable {
     let content: String
 }

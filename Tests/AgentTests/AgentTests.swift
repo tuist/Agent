@@ -101,4 +101,37 @@ struct AgentTests {
         let customAgent = Agent.withCustomServer(baseURL: URL(string: "https://example.com")!)
         #expect(customAgent.messages.isEmpty)
     }
+    
+    @Test("Tool execution")
+    @MainActor
+    func testToolExecution() async throws {
+        let backend = MockBackend()
+        let mockTool = MockTool()
+        let agent = Agent(backend: backend, tools: [mockTool])
+        
+        // Set backend to return a tool call
+        let toolCall = ToolCall(id: "123", name: "mock_tool", input: ["test": "value"])
+        await backend.setResponseWithTools(BackendResponse(content: nil, toolCalls: [toolCall]))
+        
+        _ = try await agent.sendMessage("Use the mock tool")
+        
+        // The agent should have executed the tool and gotten a final response
+        #expect(agent.messages.count >= 3) // user message, assistant with tool call, tool result
+    }
+}
+
+struct MockTool: Tool {
+    let name = "mock_tool"
+    let description = "A mock tool for testing"
+    
+    var inputSchema: ToolInputSchema {
+        ToolInputSchema(
+            properties: ["test": PropertySchema(type: "string")],
+            required: ["test"]
+        )
+    }
+    
+    func execute(input: [String: Any]) async throws -> String {
+        return "Mock tool executed with input: \(input)"
+    }
 }

@@ -18,9 +18,9 @@ public struct OpenAIBackend: AgentBackend {
         self.session = session
     }
     
-    public func sendMessage(_ message: String, conversation: Conversation) async throws -> String {
-        let messages = conversation.messages + [Message(role: .user, content: message)]
-        let request = try createRequest(messages: messages)
+    public func sendMessage(_ message: String, conversation: Conversation, tools: [Tool]) async throws -> BackendResponse {
+        // OpenAI backend doesn't support tools yet, just process messages normally
+        let request = try createRequest(messages: conversation.messages)
         
         let (data, response) = try await session.data(for: request)
         
@@ -30,7 +30,8 @@ public struct OpenAIBackend: AgentBackend {
         
         switch httpResponse.statusCode {
         case 200:
-            return try parseResponse(data)
+            let content = try parseResponse(data)
+            return BackendResponse(content: content)
         case 401:
             throw AgentError.authenticationError
         case 429:
@@ -42,12 +43,12 @@ public struct OpenAIBackend: AgentBackend {
         }
     }
     
-    public func streamMessage(_ message: String, conversation: Conversation) -> AsyncThrowingStream<String, Error> {
+    public func streamMessage(_ message: String, conversation: Conversation, tools: [Tool]) -> AsyncThrowingStream<StreamChunk, Error> {
         AsyncThrowingStream { continuation in
             Task {
                 do {
-                    let messages = conversation.messages + [Message(role: .user, content: message)]
-                    let request = try createStreamRequest(messages: messages)
+                    // OpenAI backend doesn't support tools yet, just process messages normally
+                    let request = try createStreamRequest(messages: conversation.messages)
                     
                     let (asyncBytes, response) = try await session.bytes(for: request)
                     
@@ -66,9 +67,9 @@ public struct OpenAIBackend: AgentBackend {
                             }
                             
                             if let data = jsonString.data(using: .utf8),
-                               let chunk = try? JSONDecoder().decode(StreamChunk.self, from: data),
+                               let chunk = try? JSONDecoder().decode(OpenAIStreamChunk.self, from: data),
                                let content = chunk.choices.first?.delta.content {
-                                continuation.yield(content)
+                                continuation.yield(.content(content))
                             }
                         }
                     }
@@ -88,9 +89,14 @@ public struct OpenAIBackend: AgentBackend {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         
+        let openAIMessages = messages.compactMap { message -> OpenAIMessage? in
+            guard let content = message.content else { return nil }
+            return OpenAIMessage(role: message.role.rawValue, content: content)
+        }
+        
         let requestBody = OpenAIRequest(
             model: model,
-            messages: messages.map { OpenAIMessage(role: $0.role.rawValue, content: $0.content) }
+            messages: openAIMessages
         )
         
         request.httpBody = try JSONEncoder().encode(requestBody)
@@ -100,9 +106,14 @@ public struct OpenAIBackend: AgentBackend {
     private func createStreamRequest(messages: [Message]) throws -> URLRequest {
         var request = try createRequest(messages: messages)
         
+        let openAIMessages = messages.compactMap { message -> OpenAIMessage? in
+            guard let content = message.content else { return nil }
+            return OpenAIMessage(role: message.role.rawValue, content: content)
+        }
+        
         let requestBody = OpenAIRequest(
             model: model,
-            messages: messages.map { OpenAIMessage(role: $0.role.rawValue, content: $0.content) },
+            messages: openAIMessages,
             stream: true
         )
         
@@ -139,7 +150,7 @@ private struct OpenAIResponse: Codable {
     }
 }
 
-private struct StreamChunk: Codable {
+private struct OpenAIStreamChunk: Codable {
     let choices: [Choice]
     
     struct Choice: Codable {

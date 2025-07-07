@@ -12,6 +12,12 @@ struct BackendTests {
         #expect(message.content == "Hello")
         #expect(message.id.isEmpty == false)
         #expect(message.timestamp <= Date())
+        
+        // Test tool message
+        let toolMessage = Message(role: .tool, content: "Tool result", toolCallId: "123")
+        #expect(toolMessage.role == .tool)
+        #expect(toolMessage.content == "Tool result")
+        #expect(toolMessage.toolCallId == "123")
     }
     
     @Test("Conversation structure")
@@ -47,29 +53,44 @@ struct BackendTests {
 
 actor MockBackend: AgentBackend {
     private var shouldThrowError = false
-    private var responseToReturn = "Mock response"
-    private var streamChunks: [String] = ["Hello", " ", "World", "!"]
+    private var responseToReturn = BackendResponse(content: "Mock response")
+    private var streamChunks: [StreamChunk] = [.content("Hello"), .content(" "), .content("World"), .content("!")]
+    private var callCount = 0
     
     func setShouldThrowError(_ value: Bool) {
         shouldThrowError = value
     }
     
     func setResponse(_ response: String) {
+        responseToReturn = BackendResponse(content: response)
+    }
+    
+    func setResponseWithTools(_ response: BackendResponse) {
         responseToReturn = response
     }
     
     func setStreamChunks(_ chunks: [String]) {
-        streamChunks = chunks
+        streamChunks = chunks.map { .content($0) }
     }
     
-    func sendMessage(_ message: String, conversation: Conversation) async throws -> String {
+    func sendMessage(_ message: String, conversation: Conversation, tools: [Tool]) async throws -> BackendResponse {
         if shouldThrowError {
             throw AgentError.invalidResponse
         }
+        
+        // For the tool test, return tool call on first call, then final response
+        callCount += 1
+        if callCount == 1 && responseToReturn.toolCalls != nil {
+            return responseToReturn
+        } else if callCount > 1 && responseToReturn.toolCalls != nil {
+            // After tool execution, return a final response
+            return BackendResponse(content: "Tool executed successfully")
+        }
+        
         return responseToReturn
     }
     
-    nonisolated func streamMessage(_ message: String, conversation: Conversation) -> AsyncThrowingStream<String, Error> {
+    nonisolated func streamMessage(_ message: String, conversation: Conversation, tools: [Tool]) -> AsyncThrowingStream<StreamChunk, Error> {
         AsyncThrowingStream { continuation in
             Task { @MainActor in
                 let shouldThrow = await self.shouldThrowError
